@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project>
+	<pomVersion>3</pomVersion>
+	<name>Sakai Maven Plugin</name>
+	<groupId>sakaiproject</groupId>
+	<id>sakai</id>
+	<currentVersion>sakai.2.0.0</currentVersion>
+	<organization>
+		<name>University of Michigan</name>
+		<url>http://sakaiproject.org/</url>
+	</organization>
+	<inceptionYear>2003</inceptionYear>
+
+	<dependencies>
+    	<dependency>
+            <groupId>taglibrarydoc</groupId>
+            <artifactId>tlddoc</artifactId>
+            <version>1.2</version>
+            <url>https://taglibrarydoc.dev.java.net/</url>
+    	</dependency>
+	</dependencies>
+
+	<build>
+
+		<sourceDirectory>src/java</sourceDirectory>
+
+		<resources>
+			<resource>
+				<directory>${basedir}/src</directory>
+				<includes>
+					<include>**/*.properties</include>
+					<include>**/*.xml</include>
+					<include>**/*.jelly</include>
+				</includes>
+			</resource>
+		</resources>
+	
+	</build>
+
+</project>

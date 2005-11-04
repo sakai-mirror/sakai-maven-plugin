@@ -633,8 +633,7 @@
 	<goal name="sakai:taglibdoc" description="Sakai: Create JSF taglibdocs.">
 		<ant:java fork="true" jar="${maven.repo.local}/taglibrarydoc/jars/tlddoc-1.2.jar">
 			<arg line="-d ${basedir}/target/taglibdoc" />
-			<arg line="${basedir}/jsf/widgets/src/META-INF/sakaix-jsf.tld" />
-			<arg line="${basedir}/jsf/widgets-1/src/META-INF/sakai_jsf.tld" />
+			<arg line="${basedir}/jsf/widgets/src/META-INF/sakai-jsf.tld" />
 		</ant:java>
 		
 		<jar jarfile="target/sakai-taglibdoc.zip" basedir="target/taglibdoc" />

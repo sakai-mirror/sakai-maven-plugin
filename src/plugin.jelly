@@ -644,4 +644,30 @@
 		</j:if>
 	</goal>
 
+	<!-- Integration Testing -->
+    <postGoal name="sakai:deploy">
+    	<j:choose>
+    		<j:when test="${maven.itest}">
+    			<j:choose>
+    				<j:when test="${maven.test.skip}">
+			    		<ant:echo message="* * * Integration tests are currently disabled by default. Run maven with -Dmaven.test.skip=false to enable these tests."/>
+	    			</j:when>
+	    			<j:otherwise>
+			    		<ant:echo message="Running Sakai integration tests"/>
+				        <maven:reactor
+				           includes="**/*integration-test/project.xml"
+				           basedir="${basedir}"
+				           goals="test:test"
+				           ignoreFailures="false"
+				           postProcessing="true"
+				           />
+	    			</j:otherwise>
+	        	</j:choose>
+	        </j:when>
+	        <j:otherwise>
+	    		<ant:echo message="* * * To run integration tests, run maven with -Dmaven.itest=true"/>
+	        </j:otherwise>
+        </j:choose>
+   </postGoal>
+
 </project>

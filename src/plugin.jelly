@@ -1,0 +1,660 @@
+<?xml version="1.0"?>
+	
+<project xmlns:j="jelly:core"
+	xmlns:license="license"
+	xmlns:util="jelly:util"
+	xmlns:ant="jelly:ant"
+	xmlns:artifact="artifact"
+	xmlns:maven="jelly:maven">
+
+	<!-- un qualified shortcuts (i.e. no sakai:). Warning: this is in the name space shared by all plugins -->
+	<goal name="sakai" prereqs="sakai:clean_build_deploy" description="clean then build then deploy" />
+	<goal name="cln" prereqs="sakai:clean" description="Sakai: cleanup from prior builds" />
+	<goal name="bld" prereqs="sakai:build" description="Sakai: compile and package the build" />
+	<goal name="dpl" prereqs="sakai:deploy" description="Sakai: deploy to the local tomcat" />
+	<goal name="und" prereqs="sakai:undeploy" description="Sakai: remove from the local tomcat" />
+
+  	<goal name="sakai:clean" description="cleanup from prior builds">
+		<maven:reactor
+			includes="**/project.xml"
+			basedir="${basedir}"
+			goals="sakai:sakai.clean"
+			banner="cleaning:"
+			ignoreFailures="true"
+			/>
+	</goal>
+
+  	<goal name="sakai:build" description="compile and package the build">
+		<maven:reactor
+			includes="**/project.xml"
+			basedir="${basedir}"
+			goals="sakai:sakai.build"
+			banner="building:"
+			ignoreFailures="false"
+			/>
+	</goal>
+
+ 	<goal name="sakai:clean_build" prereqs="sakai:clean,sakai:build" description="clean and then build" />
+
+ 	<goal name="sakai:clean_build_deploy" prereqs="sakai:clean,sakai:build,sakai:deploy" description="clean then build then deploy" />
+
+	<goal name="sakai:deploy-report" description="Report on what jars Sakai deploys - which projects deploy what to where">
+		<maven:reactor
+			includes="**/project.xml"
+			basedir="${basedir}"
+			ignoreFailures="true"
+			postProcessing="true"
+			/>
+		<j:set var="count" value="0" />
+		<j:set var="done" value="" />
+		<j:set var="destsStr" value="shared,common,server" />
+		<j:set var="dests" value="${destsStr.split(',')}" />
+		<j:new var="countBundledArtifacts" className="java.util.HashMap" />
+		<j:new var="artifactsDeployed" className="java.util.HashSet" />
+		<j:new var="artifactsDeployedWithVersion" className="java.util.HashSet" />
+		
+		<ant:echo>***************************************</ant:echo>
+		<ant:echo>PROJECTS DEPLOYING THEMSELVES TO SHARED</ant:echo>
+		<ant:echo>***************************************</ant:echo>
+		<j:forEach var="pom" items="${reactorProjects}">
+			<j:set var="headerOutputFlag" value="false" />
+			
+			<j:if test="${pom.getProperty('deploy.target') != null}">
+				<j:if test="${pom.getProperty('deploy.type')=='jar'}">
+					<j:if test="${headerOutputFlag=='false'}">
+						<ant:echo>  ${pom.id}</ant:echo>
+						<j:set var="headerOutputFlag" value="true" />
+					</j:if>
+					<ant:echo>    ${pom.artifactId}-${pom.currentVersion}.jar</ant:echo>
+					<j:set var="artWithVers" value="${pom.artifactId}-${pom.currentVersion}.jar" />
+					<j:set var="repeatArtifactId" value="${artifactsDeployed.add(pom.artifactId)}" />
+					<j:set var="repeatArtifactVersion" value="${artifactsDeployedWithVersion.add(artWithVers)}" />
+					<j:if test="${repeatArtifactId==false}">
+						<j:if test="${repeatArtifactVersion}">
+							<ant:echo>WARNING: Multiple versions deployed: ${pom.artifactId}</ant:echo>
+						</j:if>
+					</j:if>
+				</j:if>
+			</j:if>
+		</j:forEach>	
+		
+		 			
+		<ant:echo></ant:echo>
+		<ant:echo></ant:echo>
+		<ant:echo>***************************************</ant:echo>
+		<ant:echo>PROJECTS DEPLOYING OTHER JARS TO SHARED</ant:echo>
+		<ant:echo>***************************************</ant:echo>
+		<j:forEach var="pom" items="${reactorProjects}">
+			<j:set var="headerOutputFlag" value="false" />
+			
+			<j:forEach var="artifact" items="${pom.artifacts}">
+				<j:set var="dep" value="${artifact.dependency}"/>
+				<j:if test="${dep.type=='jar'}">
+					<j:if test="${dep.getProperty('deploy.target') != null}">
+						<j:set var="artWithVers" value="${dep.artifactId}-${dep.version}.jar" />
+						<j:if test="${headerOutputFlag=='false'}">
+							<ant:echo>  ${pom.id}</ant:echo>
+							<j:set var="headerOutputFlag" value="true" />
+						</j:if>
+						<ant:echo>    ${dep.artifactId}-${dep.version}.jar</ant:echo>
+						
+						<j:set var="repeatArtifactId" value="${artifactsDeployed.add(dep.artifactId)}" />
+						<j:set var="repeatArtifactVersion" value="${artifactsDeployedWithVersion.add(artWithVers)}" />
+						<j:if test="${repeatArtifactId==false}">
+							<j:if test="${repeatArtifactVersion}">
+								<ant:echo>WARNING: Multiple versions deployed: ${dep.artifactId}</ant:echo>
+							</j:if>
+						</j:if>
+					</j:if>
+				</j:if>
+			</j:forEach>
+		</j:forEach>
+
+		
+		<ant:echo></ant:echo>
+		<ant:echo></ant:echo>		
+		<ant:echo>***************************************</ant:echo>
+		<ant:echo>PROJECTS BUNDLING JARS IN THEIR WEBAPPS</ant:echo>
+		<ant:echo>***************************************</ant:echo>
+		<j:forEach var="pom" items="${reactorProjects}">
+			<j:set var="headerOutputFlag" value="false" />
+			<j:forEach var="artifact" items="${pom.artifacts}">
+				<j:set var="dep" value="${artifact.dependency}"/>
+				<j:if test="${dep.type=='jar'}">
+					<j:set var="artWithVers" value="${dep.artifactId}-${dep.version}.jar" />
+					<j:if test="${dep.getProperty('war.bundle')=='true'}">
+						<j:if test="${headerOutputFlag=='false'}">
+							<ant:echo>  ${pom.id}</ant:echo>
+							<j:set var="headerOutputFlag" value="true" />
+						</j:if>
+						<ant:echo>    ${dep.artifactId}-${dep.version}.jar</ant:echo>
+						<j:set var="tmp" value="Z" />
+						<j:if test="${countBundledArtifacts.keys.contains(dep.artifactId)}">
+							<j:set var="tmp" value="${countBundledArtifacts.get(dep.artifactId)}Z" />
+						</j:if>
+						<j:set var="nada" value="${countBundledArtifacts.put(dep.artifactId, tmp)}" />
+						<j:if test="${artifactsDeployed.contains(dep.artifactId)}">
+							<ant:echo>WARNING: This project is bundling a shared jar: ${dep.artifactId}</ant:echo>
+						</j:if>
+					</j:if>
+				</j:if>
+			</j:forEach>
+		</j:forEach>
+		
+		<!--
+		<ant:echo></ant:echo>
+		<ant:echo></ant:echo>
+		<ant:echo>**********************</ant:echo>
+		<ant:echo>DUPLICATE BUNDLED JARS</ant:echo>
+		<ant:echo>**********************</ant:echo>
+		<j:forEach var="artifact" items="${countBundledArtifacts.keys()}">
+			<ant:echo>  ${artifact} - ${countBundledArtifacts.get(artifact)}</ant:echo>
+		</j:forEach>
+		-->
+		
+		<ant:echo></ant:echo>
+		<ant:echo></ant:echo>
+		<ant:echo></ant:echo>
+		<ant:echo>* * * Report complete * * *</ant:echo>	
+		<!-- <ant:echo>Artifacts: ${artifactsDeployed}</ant:echo> -->
+		<!-- <ant:echo>Artifacts with version #s: ${artifactsDeployedWithVersion}</ant:echo> -->
+	</goal>
+
+ 	<goal name="sakai:deploy" description="deploy to the local tomcat">
+		<maven:reactor
+			includes="**/project.xml"
+			basedir="${basedir}"
+			banner="checking:"
+			ignoreFailures="false"
+			postProcessing="true"
+			/>
+		<j:set var="count" value="0" />
+		<j:set var="done" value="" />
+		<j:forEach var="pom" items="${reactorProjects}">
+
+			<ant:echo>* * * Deploying artifacts and dependencies for: ${pom.name}</ant:echo>
+
+			<!-- deploy type ("jar" or "war" or "components" : default is none) -->
+			<j:set var="deployType" value="none"/>
+			<j:if test="${pom.getProperty('deploy.type')=='jar'}">
+				<j:set var="deployType" value="jar"/>
+			</j:if>
+			<j:if test="${pom.getProperty('deploy.type')=='war'}">
+				<j:set var="deployType" value="war"/>
+			</j:if>
+			<j:if test="${pom.getProperty('deploy.type')=='components'}">
+				<j:set var="deployType" value="components"/>
+			</j:if>
+
+			<!-- jar deploy -->
+			<j:if test="${deployType=='jar'}">
+
+				<!-- figure destPath "shared" "common" "server" -->
+				<j:set var="destPath" value="none"/>
+				<j:if test="${pom.getProperty('deploy.target')=='shared'}">
+					<j:set var="destPath" value="shared/lib/"/>
+				</j:if>
+				<j:if test="${pom.getProperty('deploy.target')=='common'}">
+					<j:set var="destPath" value="common/lib/"/>
+				</j:if>
+				<j:if test="${pom.getProperty('deploy.target')=='server'}">
+					<j:set var="destPath" value="server/lib/"/>
+				</j:if>
+
+				<!-- deploy if needed -->
+				<j:if test="${destPath != 'none'}">
+
+					<!-- setup copy source and dest -->
+					<j:set var="source" value="${maven.repo.local}/${pom.groupId}/jars/${pom.artifactId}-${pom.currentVersion}.jar" />
+					<j:set var="dest" value="${maven.tomcat.home}${destPath}${pom.artifactId}-${pom.currentVersion}.jar" />
+					<!-- <ant:echo>source: ${source}</ant:echo> -->
+					<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+	
+					<!-- check if it's already been deployed by this deploy -->
+					<j:set var="test" value='${done.indexOf(dest)}' />
+					<j:if test="${test=='-1'}">
+						<!-- copy -->
+						<ant:echo>     deploying jar ${pom.artifactId} (version ${pom.currentVersion}) to ${destPath}</ant:echo>
+						<ant:copy file="${source}" tofile="${dest}" overwrite="true" />
+						<j:set var="count" value="${count+1}" />
+						<j:set var="done" value="${done} ${dest}" />
+					</j:if>
+				</j:if>
+
+			</j:if>
+			
+			<!-- war deploy -->
+			<j:if test="${deployType=='war'}">
+
+				<!-- setup copy source and dest, and the delete target for the old expanded war -->
+				<j:set var="source" value="${maven.repo.local}/${pom.groupId}/wars/${pom.artifactId}-${pom.currentVersion}.war" />
+				<j:set var="dest" value="${maven.tomcat.home}/webapps/${pom.artifactId}.war" />
+				<j:set var="del" value="${maven.tomcat.home}/webapps/${pom.artifactId}" />
+				<!-- <ant:echo>source: ${source}</ant:echo> -->
+				<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+				<!-- <ant:echo>delete: ${del}</ant:echo> -->
+
+				<!-- delete then copy -->
+				<ant:echo>     deploying war ${pom.artifactId} (version ${pom.currentVersion})</ant:echo>
+				<delete dir="${del}"/>
+				<ant:copy file="${source}" tofile="${dest}" overwrite="true" />
+				<j:set var="count" value="${count+1}" />
+
+			</j:if>
+
+			<!-- components deploy -->
+			<j:if test="${deployType=='components'}">
+
+				<!-- where go components? -->
+				<j:set var="components.home" value = "${maven.tomcat.home}components/" />
+				<j:if test="${context.getVariable('maven.sakai.components') != null}">
+					<j:set var="components.home" value="${maven.sakai.components}" />
+				</j:if>
+
+				<!-- setup copy source and dest, and the delete target for the old expanded war -->
+				<j:set var="source" value="${maven.repo.local}/${pom.groupId}/wars/${pom.artifactId}-${pom.currentVersion}.war" />
+				<j:set var="dest" value="${components.home}${pom.artifactId}" />
+				<!-- <ant:echo>source: ${source}</ant:echo> -->
+				<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+
+				<!-- delete then copy -->
+				<ant:echo>     deploying components ${pom.artifactId} (version ${pom.currentVersion})</ant:echo>
+				<delete dir="${dest}"/>
+
+				<ant:unwar src="${source}"
+					dest="${dest}"
+					overwrite="true" />
+
+				<j:set var="count" value="${count+1}" />
+
+			</j:if>
+
+			<!-- deployable dependencies -->
+			<j:forEach var="artifact" items="${pom.artifacts}">
+				<j:set var="dep" value="${artifact.dependency}"/>
+				<j:if test="${dep.type=='jar'}">
+	
+					<!-- figure destPath "shared" "common" "server" or none -->
+					<j:set var="destPath" value="none"/>
+					<j:if test="${dep.getProperty('deploy.target')=='shared'}">
+						<j:set var="destPath" value="shared/lib/"/>
+					</j:if>
+					<j:if test="${dep.getProperty('deploy.target')=='common'}">
+						<j:set var="destPath" value="common/lib/"/>
+					</j:if>
+					<j:if test="${dep.getProperty('deploy.target')=='server'}">
+						<j:set var="destPath" value="server/lib/"/>
+					</j:if>
+	
+					<!-- deploy if needed -->
+					<j:if test="${destPath != 'none'}">
+	
+						<!-- setup copy source and dest -->
+						<j:set var="source" value="${artifact.path}" />
+						<j:set var="dest" value="${maven.tomcat.home}${destPath}${dep.artifactId}-${dep.version}.jar" />
+						<!-- <ant:echo>source: ${source}</ant:echo> -->
+						<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+
+						<!-- check if it's already been deployed by this deploy -->
+						<j:set var="test" value='${done.indexOf(dest)}' />
+						<j:if test="${test=='-1'}">
+							<!-- copy, first clearing the destination of any old versions of the file -->
+							<delete quiet="true" failonerror="false">
+								<fileset dir="${maven.tomcat.home}${destPath}" includes="${dep.artifactId}-*.jar"/>
+							</delete>
+							<ant:echo>     deploying jar ${dep.artifactId} (version ${dep.version}) to ${destPath}</ant:echo>
+							<ant:copy file="${source}" tofile="${dest}" overwrite="true" />
+							<j:set var="count" value="${count+1}" />
+							<j:set var="done" value="${done} ${dest}" />
+						</j:if>
+					</j:if>
+				</j:if>
+			</j:forEach>
+
+			<ant:echo></ant:echo>
+
+		</j:forEach>
+		<ant:echo>* * * Deploy complete - files deployed: ${count}</ant:echo>
+	</goal>
+
+ 	<goal name="sakai:deploy-zip" description="deploy to the maven.deploy.home and zip a tomcat overlay structure">
+		<j:set var="deploy.home" value = "target/" />
+		<j:if test="${context.getVariable('maven.deploy.home') != null}">
+			<j:set var="deploy.home" value="${maven.deploy.home}" />
+		</j:if>
+	
+		<delete dir="${deploy.home}"/>
+		<delete file="sakai.zip" />
+		<delete file="sakai.tar" />
+		<delete file="sakai.tar.gz" />
+
+		<maven:reactor
+			includes="**/project.xml"
+			basedir="${basedir}"
+			banner="checking:"
+			ignoreFailures="false"
+			postProcessing="true"
+			/>
+		<j:set var="count" value="0" />
+		<j:set var="done" value="" />
+		<j:forEach var="pom" items="${reactorProjects}">
+
+			<ant:echo>* * * Deploying artifacts and dependencies for: ${pom.name}</ant:echo>
+
+			<!-- deploy type ("jar" or "war" or "components" : default is none) -->
+			<j:set var="deployType" value="none"/>
+			<j:if test="${pom.getProperty('deploy.type')=='jar'}">
+				<j:set var="deployType" value="jar"/>
+			</j:if>
+			<j:if test="${pom.getProperty('deploy.type')=='war'}">
+				<j:set var="deployType" value="war"/>
+			</j:if>
+			<j:if test="${pom.getProperty('deploy.type')=='components'}">
+				<j:set var="deployType" value="components"/>
+			</j:if>
+
+			<!-- jar deploy -->
+			<j:if test="${deployType=='jar'}">
+
+				<!-- figure destPath "shared" "common" "server" -->
+				<j:set var="destPath" value="none"/>
+				<j:if test="${pom.getProperty('deploy.target')=='shared'}">
+					<j:set var="destPath" value="shared/lib/"/>
+				</j:if>
+				<j:if test="${pom.getProperty('deploy.target')=='common'}">
+					<j:set var="destPath" value="common/lib/"/>
+				</j:if>
+				<j:if test="${pom.getProperty('deploy.target')=='server'}">
+					<j:set var="destPath" value="server/lib/"/>
+				</j:if>
+
+				<!-- deploy if needed -->
+				<j:if test="${destPath != 'none'}">
+
+					<!-- setup copy source and dest -->
+					<j:set var="source" value="${maven.repo.local}/${pom.groupId}/jars/${pom.artifactId}-${pom.currentVersion}.jar" />
+					<j:set var="dest" value="${deploy.home}${destPath}${pom.artifactId}-${pom.currentVersion}.jar" />
+					<!-- <ant:echo>source: ${source}</ant:echo> -->
+					<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+	
+					<!-- check if it's already been deployed by this deploy -->
+					<j:set var="test" value='${done.indexOf(dest)}' />
+					<j:if test="${test=='-1'}">
+						<!-- copy -->
+						<ant:echo>     deploying jar ${pom.artifactId} (version ${pom.currentVersion}) to ${destPath}</ant:echo>
+						<ant:copy file="${source}" tofile="${dest}" overwrite="true" />
+						<j:set var="count" value="${count+1}" />
+						<j:set var="done" value="${done} ${dest}" />
+					</j:if>
+				</j:if>
+
+			</j:if>
+			
+			<!-- war deploy -->
+			<j:if test="${deployType=='war'}">
+
+				<!-- setup copy source and dest, and the delete target for the old expanded war -->
+				<j:set var="source" value="${maven.repo.local}/${pom.groupId}/wars/${pom.artifactId}-${pom.currentVersion}.war" />
+				<j:set var="dest" value="${deploy.home}/webapps/${pom.artifactId}.war" />
+				<j:set var="del" value="${deploy.home}/webapps/${pom.artifactId}" />
+				<!-- <ant:echo>source: ${source}</ant:echo> -->
+				<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+				<!-- <ant:echo>delete: ${del}</ant:echo> -->
+
+				<!-- delete then copy -->
+				<ant:echo>     deploying war ${pom.artifactId} (version ${pom.currentVersion})</ant:echo>
+				<delete dir="${del}"/>
+				<ant:copy file="${source}" tofile="${dest}" overwrite="true" />
+				<j:set var="count" value="${count+1}" />
+
+			</j:if>
+
+			<!-- components deploy -->
+			<j:if test="${deployType=='components'}">
+
+				<!-- where go components? -->
+				<j:set var="components.home" value = "${deploy.home}components/" />
+				<!-- <j:if test="${context.getVariable('maven.sakai.components') != null}">
+					<j:set var="components.home" value="${maven.sakai.components}" />
+				</j:if> -->
+
+				<!-- setup copy source and dest, and the delete target for the old expanded war -->
+				<j:set var="source" value="${maven.repo.local}/${pom.groupId}/wars/${pom.artifactId}-${pom.currentVersion}.war" />
+				<j:set var="dest" value="${components.home}${pom.artifactId}" />
+				<!-- <ant:echo>source: ${source}</ant:echo> -->
+				<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+
+				<!-- delete then copy -->
+				<ant:echo>     deploying components ${pom.artifactId} (version ${pom.currentVersion})</ant:echo>
+				<delete dir="${dest}"/>
+
+				<ant:unwar src="${source}"
+					dest="${dest}"
+					overwrite="true" />
+
+				<j:set var="count" value="${count+1}" />
+
+			</j:if>
+
+			<!-- deployable dependencies -->
+			<j:forEach var="artifact" items="${pom.artifacts}">
+				<j:set var="dep" value="${artifact.dependency}"/>
+				<j:if test="${dep.type=='jar'}">
+	
+					<!-- figure destPath "shared" "common" "server" or none -->
+					<j:set var="destPath" value="none"/>
+					<j:if test="${dep.getProperty('deploy.target')=='shared'}">
+						<j:set var="destPath" value="shared/lib/"/>
+					</j:if>
+					<j:if test="${dep.getProperty('deploy.target')=='common'}">
+						<j:set var="destPath" value="common/lib/"/>
+					</j:if>
+					<j:if test="${dep.getProperty('deploy.target')=='server'}">
+						<j:set var="destPath" value="server/lib/"/>
+					</j:if>
+	
+					<!-- deploy if needed -->
+					<j:if test="${destPath != 'none'}">
+	
+						<!-- setup copy source and dest -->
+						<j:set var="source" value="${artifact.path}" />
+						<j:set var="dest" value="${deploy.home}${destPath}${dep.artifactId}-${dep.version}.jar" />
+						<!-- <ant:echo>source: ${source}</ant:echo> -->
+						<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+
+						<!-- check if it's already been deployed by this deploy -->
+						<j:set var="test" value='${done.indexOf(dest)}' />
+						<j:if test="${test=='-1'}">
+							<!-- copy, first clearing the destination of any old versions of the file -->
+							<delete quiet="true" failonerror="false">
+								<fileset dir="${deploy.home}${destPath}" includes="${dep.artifactId}-*.jar"/>
+							</delete>
+							<ant:echo>     deploying jar ${dep.artifactId} (version ${dep.version}) to ${destPath}</ant:echo>
+							<ant:copy file="${source}" tofile="${dest}" overwrite="true" />
+							<j:set var="count" value="${count+1}" />
+							<j:set var="done" value="${done} ${dest}" />
+						</j:if>
+					</j:if>
+				</j:if>
+			</j:forEach>
+
+			<ant:echo></ant:echo>
+
+		</j:forEach>
+
+		<copy todir="${deploy.home}/licenses/">
+			<fileset dir="${basedir}/licenses">
+				<exclude name="CVS/**"/>
+			</fileset>
+		</copy>
+		<delete file="${deploy.home}/licenses/.project" />
+		<ant:copy file="${basedir}/sakai_license_1_0.txt" tofile="${deploy.home}/sakai_license_1_0.txt" overwrite="true" />
+		<ant:copy file="${basedir}/sakai_license_1_0.html" tofile="${deploy.home}/sakai_license_1_0.html" overwrite="true" />
+
+		<zip destfile="sakai.zip" basedir="${deploy.home}" />
+
+		<tar destfile="sakai.tar" longfile="gnu" basedir="${deploy.home}" />
+		<gzip zipfile="sakai.tar.gz" src="sakai.tar"/>
+		<delete file="sakai.tar" />
+
+		<delete dir="${deploy.home}"/>
+
+		<ant:echo>* * * deploy-zip to sakai.zip / tar.gz complete - files deployed: ${count}</ant:echo>
+	</goal>
+
+ 	<goal name="sakai:undeploy" description="remove from the local tomcat">
+		<maven:reactor
+			includes="**/project.xml"
+			basedir="${basedir}"
+			banner="checking:"
+			ignoreFailures="false"
+			postProcessing="true"
+			/>
+		<j:forEach var="pom" items="${reactorProjects}">
+
+			<ant:echo>* * * Undeploying artifacts and dependencies for: ${pom.name}</ant:echo>
+
+			<!-- deploy type ("jar" or "war" : default is none) -->
+			<j:set var="deployType" value="none"/>
+			<j:if test="${pom.getProperty('deploy.type')=='jar'}">
+				<j:set var="deployType" value="jar"/>
+			</j:if>
+			<j:if test="${pom.getProperty('deploy.type')=='war'}">
+				<j:set var="deployType" value="war"/>
+			</j:if>
+			<j:if test="${pom.getProperty('deploy.type')=='components'}">
+				<j:set var="deployType" value="components"/>
+			</j:if>
+
+			<!-- jar undeploy -->
+			<j:if test="${deployType=='jar'}">
+
+				<!-- figure destPath "shared" "common" "server" -->
+				<j:set var="destPath" value="none"/>
+				<j:if test="${pom.getProperty('deploy.target')=='shared'}">
+					<j:set var="destPath" value="shared/lib/"/>
+				</j:if>
+				<j:if test="${pom.getProperty('deploy.target')=='common'}">
+					<j:set var="destPath" value="common/lib/"/>
+				</j:if>
+				<j:if test="${pom.getProperty('deploy.target')=='server'}">
+					<j:set var="destPath" value="server/lib/"/>
+				</j:if>
+
+				<!-- undeploy if needed -->
+				<j:if test="${destPath != 'none'}">
+					<!-- setup dest -->
+					<j:set var="dest" value="${maven.tomcat.home}${destPath}${pom.artifactId}-${pom.currentVersion}.jar" />
+					<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+	
+					<!-- delete -->
+					<ant:echo>     undeploying jar ${pom.artifactId} (version ${pom.currentVersion}) from ${destPath}</ant:echo>
+					<delete file="${dest}" />
+				</j:if>
+
+			</j:if>
+			
+			<!-- war undeploy -->
+			<j:if test="${deployType=='war'}">
+
+				<!-- setup dest, and the delete target for the old expanded war -->
+				<j:set var="dest" value="${maven.tomcat.home}/webapps/${pom.artifactId}.war" />
+				<j:set var="del" value="${maven.tomcat.home}/webapps/${pom.artifactId}" />
+				<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+				<!-- <ant:echo>delete: ${del}</ant:echo> -->
+
+				<!-- delete both  -->
+				<ant:echo>     undeploying war ${pom.artifactId} (version ${pom.currentVersion})</ant:echo>
+				<delete dir="${del}" />
+				<delete file="${dest}" />
+
+			</j:if>
+
+			<!-- components undeploy -->
+			<j:if test="${deployType=='components'}">
+
+				<!-- where go components? -->
+				<j:set var="components.home" value = "${maven.tomcat.home}components/" />
+				<j:if test="${context.getVariable('maven.sakai.components') != null}">
+					<j:set var="components.home" value="${maven.sakai.components}" />
+				</j:if>
+
+				<!-- setup dest, and the delete target for the old expanded war -->
+				<j:set var="dest" value="${components.home}${pom.artifactId}" />
+				<!-- <ant:echo>delete: ${dest}</ant:echo> -->
+
+				<!-- delete both  -->
+				<ant:echo>     undeploying components ${pom.artifactId} (version ${pom.currentVersion})</ant:echo>
+				<delete dir="${dest}" />
+
+			</j:if>
+
+			<!-- undeployable dependencies -->
+			<j:forEach var="artifact" items="${pom.artifacts}">
+				<j:set var="dep" value="${artifact.dependency}"/>
+				<j:if test="${dep.type=='jar'}">
+	
+					<!-- figure destPath "shared" "common" "server" or none -->
+					<j:set var="destPath" value="none"/>
+					<j:if test="${dep.getProperty('deploy.target')=='shared'}">
+						<j:set var="destPath" value="shared/lib/"/>
+					</j:if>
+					<j:if test="${dep.getProperty('deploy.target')=='common'}">
+						<j:set var="destPath" value="common/lib/"/>
+					</j:if>
+					<j:if test="${dep.getProperty('deploy.target')=='server'}">
+						<j:set var="destPath" value="server/lib/"/>
+					</j:if>
+	
+					<!-- undeploy if needed -->
+					<j:if test="${destPath != 'none'}">
+	
+						<!-- setup dest -->
+						<j:set var="dest" value="${maven.tomcat.home}${destPath}${dep.artifactId}-${dep.version}.jar" />
+						<!-- <ant:echo>dest: ${dest}</ant:echo> -->
+
+						<!-- delete -->
+						<ant:echo>     undeploying jar ${dep.artifactId} (version ${dep.version}) from ${destPath}</ant:echo>
+						<delete file="${dest}" />
+					</j:if>
+				</j:if>
+			</j:forEach>
+
+			<ant:echo></ant:echo>
+
+		</j:forEach>
+		<ant:echo>* * * Undeploy complete</ant:echo>
+	</goal>
+
+	<!-- these below may be overridden in a project's maven.xml to do other or more for that project -->
+
+	<goal name="sakai:sakai.clean">
+		<attainGoal name="clean:clean" />
+	</goal>
+
+	<goal name="sakai:sakai.build">
+		<j:if test="${pom.getProperty('deploy.type')=='jar'}">
+			<attainGoal name="jar:install" />
+		</j:if>
+		<j:if test="${pom.getProperty('deploy.type')=='war'}">
+			<attainGoal name="war:install" />
+		</j:if>
+		<j:if test="${pom.getProperty('deploy.type')=='components'}">
+			<attainGoal name="war:install" />
+		</j:if>
+	</goal>
+
+    <!-- Integration Testing -->
+    <goal name="itest" description="Runs integration tests on a fully built and deployed (but not running) sakai">
+        <ant:echo message="Running Sakai integration tests..."/>
+        <ant:echo message="*Sakai must be built and deployed (but not running) prior to running integration tests"/>
+        <maven:reactor
+           includes="**/*integration-test/project.xml"
+           basedir="${basedir}"
+           goals="test:test"
+           ignoreFailures="false"
+           postProcessing="true"
+           />
+    </goal>
+
+</project>

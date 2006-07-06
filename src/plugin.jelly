@@ -483,13 +483,11 @@
 		</j:forEach>
 
 		<copy todir="${deploy.home}/licenses/">
-			<fileset dir="${basedir}/licenses">
+			<fileset dir="${basedir}/reference/licenses">
 				<exclude name="CVS/**"/>
 			</fileset>
 		</copy>
-		<delete file="${deploy.home}/licenses/.project" />
-		<ant:copy file="${basedir}/sakai_license_1_0.txt" tofile="${deploy.home}/sakai_license_1_0.txt" overwrite="true" />
-		<ant:copy file="${basedir}/sakai_license_1_0.html" tofile="${deploy.home}/sakai_license_1_0.html" overwrite="true" />
+		<ant:copy file="${basedir}/ECLv1.txt" tofile="${deploy.home}/ECLv1.txt" overwrite="true" />
 
 		<zip destfile="sakai.zip" basedir="${deploy.home}" />
 
